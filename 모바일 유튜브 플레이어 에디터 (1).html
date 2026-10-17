@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>모바일 유튜브 플레이어 에디터</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#fafaf9;--pn:#fff;--tx:#1c1b1a;--sb:#6b6966;--ln:#e4e2df;--ac:#e62117;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141414;--pn:#1d1d1d;--tx:#f1f0ee;--sb:#a09d98;--ln:#333;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141414;--pn:#1d1d1d;--tx:#f1f0ee;--sb:#a09d98;--ln:#333;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:'Pretendard','Noto Sans KR',-apple-system,'Malgun Gothic',sans-serif;font-size:14px;letter-spacing:-.3px}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 60px;display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:860px){.wrap{grid-template-columns:minmax(0,1fr)}.pv{position:static!important}}
+.pv{position:sticky;top:16px}
+h1{font-size:18px;margin:0 0 4px}
+.hint{color:var(--sb);font-size:12px;line-height:1.5;margin:0 0 14px}
+details{background:var(--pn);border:1px solid var(--ln);border-radius:10px;margin-bottom:10px}
+summary{padding:12px 14px;font-weight:600;cursor:pointer}
+.fs{padding:0 14px 14px;display:grid;gap:12px}
+label{display:grid;gap:5px;font-size:12px;color:var(--sb)}
+label em{font-style:normal;color:var(--tx)}
+input[type=text],textarea,select{width:100%;padding:9px 10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;font-size:14px}
+textarea{min-height:90px;resize:vertical}
+input[type=range]{width:100%;accent-color:var(--ac)}
+.cp{display:flex;gap:8px;margin:14px 0 8px}
+button.go{flex:1;padding:12px;border:0;border-radius:10px;background:var(--ac);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+#out{font-family:ui-monospace,Menlo,monospace;font-size:11px;min-height:140px;white-space:pre}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pv">
+    <h1>유튜브 플레이어 에디터</h1>
+    <p class="hint">링크로 들어온 누구나 자기 화면에서 직접 수정할 수 있습니다. 수정 내용은 내 브라우저에만 저장되어 다른 사람에게 보이지 않고 원본도 바뀌지 않아요. 다 끝나면 코드 복사 버튼으로 티스토리 HTML 모드에 붙여넣으세요.</p>
+    <div class="ytm" id="preview"></div>
+  </div>
+  <div>
+    <div id="form"></div>
+    <details open><summary>티스토리용 코드</summary>
+      <div class="fs"><div class="cp"><button class="go" id="copy">코드 복사</button><button class="go" id="reset" style="background:var(--ln);color:var(--tx)">전체 초기화</button></div>
+      <textarea id="out" readonly></textarea></div>
+    </details>
+  </div>
+</div>
+
+<script>
+/* ===== 플레이어 스타일 (미리보기 + 내보내기 공용) ===== */
+const CSS=`
+.ytm,.ytm *{box-sizing:border-box;margin:0;padding:0;font-family:'Pretendard','Noto Sans KR',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif!important;letter-spacing:-0.5px!important;line-height:1.4;-webkit-tap-highlight-color:transparent}
+.ytm{--bg:#fff;--tx:#0f0f0f;--sb:#606060;--chip:#f2f2f2;--ln:#e5e5e5;--btn:#0f0f0f;--btx:#fff;--s:1;--f:1;--ar:16/9;width:100%;max-width:calc(417px*var(--s));margin:24px auto;overflow:hidden;color:var(--tx);position:relative}
+.ytm[data-theme=dark]{border-color:#3f3f3f;--bg:#0f0f0f;--tx:#fff;--sb:#aaa;--chip:#272727;--ln:#303030;--btn:#fff;--btx:#0f0f0f}
+.ytm-in{width:417px;transform-origin:0 0;padding:12px;border-radius:68px;background:#1c1c1e;box-shadow:inset 0 0 0 1.5px #4a4a4d,inset 0 0 0 5px #050505}
+.ytm-sc{position:relative;width:393px;height:852px;border-radius:56px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column}
+.ytm-di{position:absolute;z-index:30;top:11px;left:50%;width:126px;height:37px;margin-left:-63px;border-radius:20px;background:#000}
+.ytm-hi{position:absolute;z-index:30;bottom:8px;left:50%;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:var(--tx)}
+.ytm-sb{flex:none;height:54px;display:flex;justify-content:space-between;align-items:center;padding:8px 34px 0 52px;font-size:17px;font-weight:600}
+.ytm-sb .r{display:flex;align-items:center;gap:6px}
+.ytm-sb .a{width:18px;height:12px}.ytm-sb .w{width:17px;height:12px}.ytm-sb .b{width:27px;height:13px}
+.ytm-sc2{flex:1;min-height:0;overflow:hidden}
+.ytm-sc2::-webkit-scrollbar{display:none}
+.ytm-nt{position:absolute;z-index:40;top:11px;left:8px;right:8px;display:flex;gap:11px;align-items:center;padding:12px 14px;border-radius:26px;background:rgba(238,238,241,.82);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);box-shadow:0 8px 30px rgba(0,0,0,.25);color:#000;transform:translateY(-140%) scale(.9);opacity:0;transition:transform .55s cubic-bezier(.2,.9,.25,1.15),opacity .35s;pointer-events:none}
+.ytm-nt.on{transform:none;opacity:1;pointer-events:auto}
+.ytm-nt .mi{width:38px;height:38px;flex:none}
+.ytm-nt .bd{flex:1;min-width:0}
+.ytm-nt .nm{display:flex;justify-content:space-between;font-size:15px}
+.ytm-nt .nm b{font-weight:600}
+.ytm-nt .nm span{font-size:13px;opacity:.55}
+.ytm-nt .tx{font-size:15px;line-height:20px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ytm[data-theme=dark] .ytm-nt{background:rgba(52,52,56,.85);color:#fff}
+.ytm img{display:block;max-width:none;border:0}
+.ytm svg{display:block;width:20px;height:20px}
+.ytm svg path{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.ytm svg.f path{fill:currentColor;stroke:none}
+.ytm .on svg:not(.f) path{fill:currentColor}
+.ytm button{border:0;background:none;color:inherit;cursor:pointer;font-size:inherit}
+.ytm-v{position:relative;flex:none;width:393px;aspect-ratio:var(--ar);background:#111;overflow:hidden;user-select:none;-webkit-user-select:none}
+.ytm-v:fullscreen{width:100vw!important;height:100vh!important;aspect-ratio:auto}
+.ytm-v>img{width:100%;height:100%;object-fit:cover}
+.ytm-v iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.ytm-ov{position:absolute;inset:0;z-index:2}
+.ytm-shade{position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,.3),transparent 30%,transparent 55%,rgba(0,0,0,.65));opacity:0;transition:opacity .2s}
+.ytm-pb{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;color:#fff;opacity:0;pointer-events:none;transition:opacity .2s}
+.ytm-pb svg{width:36px;height:36px}
+.ytm-tm{position:absolute;left:12px;bottom:22px;color:#fff;font-size:calc(12px*var(--f));font-weight:500;opacity:0;transition:opacity .2s}
+.ytm-tm span{opacity:.7}
+.ytm-fs{position:absolute;right:10px;bottom:20px;color:#fff;opacity:0;pointer-events:none;transition:opacity .2s}
+.ytm-fs svg{width:22px;height:22px}
+.ytm-v.show .ytm-shade,.ytm-v.show .ytm-pb,.ytm-v.show .ytm-tm,.ytm-v.show .ytm-fs{opacity:1}
+.ytm-v.show .ytm-pb,.ytm-v.show .ytm-fs{pointer-events:auto}
+.ytm-bar{position:absolute;left:0;right:0;bottom:0;height:24px;touch-action:none;cursor:pointer}
+.ytm-bar .ln{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.35)}
+.ytm-bar i{display:block;height:100%;width:0;background:#f03;position:relative}
+.ytm-bar i:after{content:"";position:absolute;right:-6px;top:-4.5px;width:12px;height:12px;border-radius:50%;background:#f03;opacity:0;transition:opacity .2s}
+.ytm-v.show .ytm-bar i:after{opacity:1}
+.rp{position:absolute;top:0;bottom:0;width:42%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.2);opacity:0;pointer-events:none;transition:opacity .15s;font-weight:600;font-size:calc(13px*var(--f))}
+.rp b{font-size:26px;line-height:1}
+.rp.l{left:0;border-radius:0 200px 200px 0}
+.rp.r{right:0;border-radius:200px 0 0 200px}
+.rp.on{opacity:1}
+.ytm-info{padding:12px 12px 0}
+.ytm-t{font-size:calc(16px*var(--f));font-weight:600;line-height:calc(22px*var(--f))}
+.ytm-m{margin-top:4px;font-size:calc(12px*var(--f));color:var(--sb);line-height:calc(18px*var(--f));cursor:pointer}
+.ytm-m b{color:var(--tx);font-weight:600}
+.ytm-d{display:none;margin-top:8px;padding:12px;background:var(--chip);border-radius:12px;font-size:calc(13px*var(--f));line-height:calc(19px*var(--f));white-space:pre-wrap}
+.ytm-d.on{display:block}
+.ytm-ch{display:flex;align-items:center;padding:14px 12px 0;gap:10px}
+.ytm-av{flex:none;border-radius:50%;object-fit:cover;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
+.ytm-chn{flex:1;min-width:0}
+.ytm-chn b{display:block;font-size:calc(14px*var(--f));font-weight:600;line-height:calc(18px*var(--f));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ytm-chn span{font-size:calc(12px*var(--f));color:var(--sb)}
+.ytm-sub{height:36px;padding:0 16px;border-radius:18px;background:var(--btn)!important;color:var(--btx)!important;font-size:calc(14px*var(--f));font-weight:600}
+.ytm-sub.on{background:var(--chip)!important;color:var(--tx)!important}
+.ytm-ac{display:flex;gap:8px;padding:12px;overflow-x:auto;scrollbar-width:none}
+.ytm-ac::-webkit-scrollbar{display:none}
+.ytm-c{flex:none;height:36px;border-radius:18px;background:var(--chip);display:flex;align-items:center;font-size:calc(14px*var(--f));font-weight:600;white-space:nowrap}
+.ytm-c button{height:36px;display:flex;align-items:center;gap:6px;padding:0 14px}
+.ytm-c i{width:1px;height:20px;background:var(--sb);opacity:.4}
+.dl{transform:rotate(180deg)}
+.ytm-cm{border-top:8px solid var(--chip);padding:14px 12px 44px}
+.ytm-ch2{font-size:calc(16px*var(--f));font-weight:600}
+.ytm-ch2 span{margin-left:6px;font-size:calc(14px*var(--f));color:var(--sb);font-weight:500}
+.ytm-in2{display:flex;gap:12px;margin:14px 0 6px}
+.ytm-in2 .box{flex:1}
+.ytm-in2 input{width:100%;height:36px;border:0;border-bottom:1px solid var(--ln);background:none;color:var(--tx);font-size:calc(14px*var(--f));outline:0;border-radius:0}
+.ytm-in2 input:focus{border-bottom:2px solid var(--tx)}
+.ytm-in2 input::placeholder{color:var(--sb)}
+.ytm-in2 .row{display:none;justify-content:flex-end;gap:8px;margin-top:8px}
+.ytm-in2 .row.on{display:flex}
+.ytm-in2 .row button{height:34px;padding:0 16px;border-radius:17px;font-size:calc(14px*var(--f));font-weight:600}
+.ytm-in2 .ok{background:#065fd4!important;color:#fff!important}
+.ytm-in2 .ok:disabled{background:var(--chip)!important;color:var(--sb)!important;cursor:default}
+.ytm-it{display:flex;gap:12px;padding:12px 0}
+.ytm-it .bd{flex:1;min-width:0}
+.ytm-it .nm{font-size:calc(12px*var(--f));color:var(--sb)}
+.ytm-it .nm b{color:var(--tx);font-weight:600}
+.ytm-it .tx{margin-top:2px;font-size:calc(14px*var(--f));line-height:calc(20px*var(--f));white-space:pre-wrap;word-break:break-all}
+.ytm-it .ft{display:flex;align-items:center;gap:18px;margin-top:6px;color:var(--sb);font-size:calc(12px*var(--f))}
+.ytm-it .ft button{display:flex;align-items:center;gap:6px;color:var(--sb);font-size:calc(12px*var(--f))}
+.ytm-it .ft button.on{color:var(--tx)}
+.ytm-it .ft svg{width:18px;height:18px}
+`;
+
+/* ===== 플레이어 본체 (내보내기 시 그대로 코드에 포함됨) ===== */
+function mount(root,CFG){
+var P={play:'M8 5v14l11-7z',pause:'M6 19h4V5H6v14zm8-14v14h4V5h-4z',fs:'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z',
+like:'M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z',
+share:'M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z',down:'M5 20h14M12 4v12m-6-6l6 6 6-6',save:'M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z'};
+function ic(p,c){return '<svg viewBox="0 0 24 24" class="'+(c||'')+'"><path d="'+p+'"/></svg>'}
+function esc(s){return String(s).replace(/[&<>"']/g,function(m){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]})}
+function nf(n){n=+n||0;if(n>=10000)return (Math.floor(n/1000)/10).toString().replace(/\.0$/,'')+'만';if(n>=1000)return (Math.floor(n/100)/10).toString().replace(/\.0$/,'')+'천';return n?String(n):''}
+function tf(s){s=Math.max(0,Math.floor(s));var h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;return (h?h+':'+('0'+m).slice(-2):m)+':'+('0'+r).slice(-2)}
+function ts(x){return String(x).split(':').reduce(function(a,b){return a*60+(+b||0)},0)}
+function avatar(img,name,s){var c=['#e91e63','#9c27b0','#3f51b0','#009688','#ff9800','#795548'],i=(name.charCodeAt(name.length>1?1:0)||0)%c.length;
+ return img?'<img class="ytm-av" src="'+esc(img)+'" style="width:'+s+'px;height:'+s+'px">':'<div class="ytm-av" style="width:'+s+'px;height:'+s+'px;background:#000;box-shadow:inset 0 0 0 1px rgba(128,128,128,.35);font-size:'+Math.round(s*.42)+'px">'+esc(name.replace('@','').charAt(0).toUpperCase())+'</div>'}
+root.__off&&root.__off();
+root.setAttribute('data-theme',CFG.theme);
+root.style.setProperty('--s',CFG.scale/100);root.style.setProperty('--f',CFG.font/100);root.style.setProperty('--ar',CFG.ratio);
+var m=CFG.videoUrl.match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/),vid=m?m[1]:'';
+var thumb=CFG.image||(vid?'https://img.youtube.com/vi/'+vid+'/hqdefault.jpg':'');
+var SB='<div class="ytm-sb"><span>'+esc(CFG.clock)+'</span><span class="r"><svg class="a" viewBox="0 0 18 12" fill="currentColor"><rect y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" width="3" height="12" rx="1"/></svg><svg class="w" viewBox="0 0 17 12"><path d="M1.2 4.3a10.5 10.5 0 0 1 14.6 0M3.9 7.2a6.7 6.7 0 0 1 9.2 0"/><circle cx="8.5" cy="10.2" r="1.7" fill="currentColor"/></svg><svg class="b" viewBox="0 0 27 13"><rect x=".5" y=".5" width="22" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="19" height="9" rx="2" fill="currentColor"/><path d="M24.5 4.5v4" style="stroke-width:1.6;opacity:.5"/></svg></span></div>';
+var box=document.createElement('div');box.className='ytm-in';root.innerHTML='';root.appendChild(box);
+box.innerHTML=
+'<div class="ytm-sc"><div class="ytm-di"></div><div class="ytm-nt"></div>'+SB+'<div class="ytm-v show">'+(thumb?'<img src="'+esc(thumb)+'" alt="">':'')+
+ '<div class="ytm-ov"><div class="ytm-shade"></div><div class="rp l"><b>«</b><span></span></div><div class="rp r"><b>»</b><span></span></div>'+
+ '<div class="ytm-pb"></div><div class="ytm-tm"></div><div class="ytm-fs">'+ic(P.fs,'f')+'</div><div class="ytm-bar"><div class="ln"><i></i></div></div></div></div>'+
+'<div class="ytm-sc2"><div class="ytm-info"><div class="ytm-t">'+esc(CFG.title)+'</div><div class="ytm-m">'+esc(CFG.views)+' &nbsp;'+esc(CFG.date)+' &nbsp;<b>더보기</b></div><div class="ytm-d">'+esc(CFG.desc)+'</div></div>'+
+'<div class="ytm-ch">'+avatar(CFG.channelImg,CFG.channel,36)+'<div class="ytm-chn"><b>'+esc(CFG.channel)+'</b><span>'+esc(CFG.subs)+'</span></div><button class="ytm-sub">구독</button></div>'+
+'<div class="ytm-ac"><div class="ytm-c"><button class="lk">'+ic(P.like)+'<span>'+nf(CFG.likes)+'</span></button><i></i><button class="dk">'+ic(P.like,'dl')+'</button></div>'+
+ '<div class="ytm-c"><button>'+ic(P.share)+'공유</button></div><div class="ytm-c"><button>'+ic(P.down)+'오프라인 저장</button></div><div class="ytm-c"><button class="sv">'+ic(P.save)+'저장</button></div></div>'+
+'<div class="ytm-cm"><div class="ytm-ch2">댓글<span class="cnt"></span></div>'+
+ '<div class="ytm-in2">'+avatar(CFG.myImg,CFG.myName,40)+'<div class="box"><input type="text" placeholder="댓글 추가..." maxlength="500"><div class="row"><button class="cc">취소</button><button class="ok" disabled>댓글</button></div></div></div><div class="list"></div></div></div><div class="ytm-hi"></div></div>';
+var $=function(s){return box.querySelector(s)};
+
+/* 크기 맞춤: 어떤 기기에서도 390px 기준 화면을 같은 비율로 확대/축소 */
+function fit(){var s=root.clientWidth/417;box.style.transform='scale('+s+')';root.style.height=box.offsetHeight*s+(root.offsetHeight-root.clientHeight)+'px'}
+fit();window.addEventListener('resize',fit);var ro=window.ResizeObserver&&new ResizeObserver(fit);ro&&ro.observe(box);
+
+/* 플레이어 */
+var v=$('.ytm-v'),ov=$('.ytm-ov'),bar=$('.ytm-bar'),fill=$('.ytm-bar i'),tm=$('.ytm-tm'),pb=$('.ytm-pb'),ifr=null,got=false,drag=false,ht,last=0,tt,S=+CFG.skip||10;
+var st={p:false,on:!vid,c:vid?0:ts(CFG.photoCur),d:ts(CFG.duration)||1};
+function ui(){fill.style.width=Math.min(100,st.c/st.d*100)+'%';tm.innerHTML=tf(st.c)+' <span>/ '+(st.d>1?tf(st.d):'0:00')+'</span>';pb.innerHTML=ic(st.p?P.pause:P.play,'f')}
+function show(){v.classList.add('show');clearTimeout(ht);if(st.p)ht=setTimeout(function(){if(!drag)v.classList.remove('show')},3000)}
+function cmd(f,a){ifr&&ifr.contentWindow&&ifr.contentWindow.postMessage(JSON.stringify({event:'command',func:f,args:a||[]}),'*')}
+function seek(t){if(!st.on)return;st.c=Math.max(0,Math.min(st.d,t));cmd('seekTo',[st.c,true]);ui()}
+function start(){st.on=true;st.p=true;ifr=document.createElement('iframe');
+ ifr.src='https://www.youtube.com/embed/'+vid+'?autoplay=1&controls=0&disablekb=1&fs=0&iv_load_policy=3&modestbranding=1&playsinline=1&rel=0&enablejsapi=1';
+ ifr.allow='autoplay;encrypted-media;picture-in-picture';v.insertBefore(ifr,ov);
+ var n=0,iv=setInterval(function(){ifr.contentWindow&&ifr.contentWindow.postMessage(JSON.stringify({event:'listening',id:1,channel:'widget'}),'*');if(++n>20||got)clearInterval(iv)},500);ui();show()}
+function toggle(){if(vid){if(!st.on){start();return}cmd(st.p?'pauseVideo':'playVideo')}st.p=!st.p;ui();show()}
+function onm(e){if(!ifr||e.source!==ifr.contentWindow)return;var d;try{d=JSON.parse(e.data)}catch(x){return}if(!d.info)return;got=true;var i=d.info;
+ if(i.duration)st.d=i.duration;if(!drag&&i.currentTime!=null)st.c=i.currentTime;if(i.playerState!=null)st.p=(i.playerState===1||i.playerState===3);ui()}
+window.addEventListener('message',onm);
+root.__off=function(){clearInterval(tk);clearTimeout(nto);io&&io.disconnect();window.removeEventListener('message',onm);window.removeEventListener('resize',fit);ro&&ro.disconnect()};
+pb.onclick=function(e){e.stopPropagation();toggle()};
+$('.ytm-fs').onclick=function(e){e.stopPropagation();var f=v.requestFullscreen||v.webkitRequestFullscreen;f&&f.call(v)};
+function flash(L){var el=$(L?'.rp.l':'.rp.r');el.querySelector('span').textContent=S+'초';el.classList.add('on');clearTimeout(el.t);el.t=setTimeout(function(){el.classList.remove('on')},600)}
+/* 화면 좌우 더블탭: 왼쪽 -N초 / 오른쪽 +N초 (사진 모드는 시간 변동 없음) */
+ov.addEventListener('click',function(e){
+ if(e.target.closest('.ytm-pb,.ytm-bar,.ytm-fs'))return;var n=Date.now();
+ if(n-last<300){clearTimeout(tt);last=0;var r=ov.getBoundingClientRect(),L=e.clientX<r.left+r.width/2;seek(st.c+(L?-S:S));flash(L)}
+ else{last=n;tt=setTimeout(function(){v.classList.contains('show')&&st.p?v.classList.remove('show'):show()},300)}});
+/* 재생바 드래그: 시간 이동 (사진 모드는 변동 없음) */
+function pos(e){var r=bar.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))}
+bar.addEventListener('pointerdown',function(e){if(!st.on)return;drag=true;bar.setPointerCapture(e.pointerId);v.classList.add('show');st.c=pos(e)*st.d;ui()});
+bar.addEventListener('pointermove',function(e){if(drag){st.c=pos(e)*st.d;ui()}});
+bar.addEventListener('pointerup',function(e){if(drag){drag=false;seek(pos(e)*st.d);show()}});
+bar.addEventListener('pointercancel',function(){drag=false});
+/* 재생 시간 진행 (사진 모드 및 신호 수신 전에는 직접 계산) */
+var tk=setInterval(function(){if((!vid||!got)&&st.p&&st.on&&!drag){st.c=Math.min(st.d,st.c+.25);if(st.c>=st.d)st.p=false;ui()}},250);
+/* 아이메시지 알림: 화면이 보이고 N초 뒤 상단에서 내려옴 */
+var MSG='<svg class="mi" viewBox="0 0 60 60"><defs><linearGradient id="mg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67f57a"/><stop offset="1" stop-color="#0db82c"/></linearGradient></defs><rect width="60" height="60" rx="13.5" fill="url(#mg)" style="stroke:none"/><ellipse cx="30" cy="27.5" rx="20" ry="16" fill="#fff" style="stroke:none"/><path d="M14 46c4.5-1.6 7.2-4.4 8.6-8l8 .5c-2.6 5.5-8.5 9.2-16.6 7.5z" style="fill:#fff;stroke:none"/></svg>';
+var nt=$('.ytm-nt'),nto,io,armed=false;
+nt.innerHTML=MSG+'<div class="bd"><div class="nm"><b>'+esc(CFG.notiName)+'</b><span>'+esc(CFG.notiTime)+'</span></div><div class="tx">'+esc(CFG.notiText)+'</div></div>';
+nt.onclick=function(){nt.classList.remove('on')};
+function arm(){if(armed||CFG.noti!=='켜기'||!(CFG.notiName||CFG.notiText))return;armed=true;nto=setTimeout(function(){nt.classList.add('on');setTimeout(function(){nt.classList.remove('on')},5000)},(+CFG.notiDelay||3)*1000)}
+if(window.IntersectionObserver){io=new IntersectionObserver(function(e){e[0].isIntersecting&&arm()},{threshold:.3});io.observe(root)}else arm();
+ui();
+
+/* 구독 / 좋아요 / 저장 */
+$('.ytm-m').onclick=function(){$('.ytm-d').classList.toggle('on')};
+var sb=$('.ytm-sub');sb.onclick=function(){var o=sb.classList.toggle('on');sb.textContent=o?'구독중':'구독'};
+var lk=$('.lk'),dk=$('.dk');
+lk.onclick=function(){var o=lk.classList.toggle('on');dk.classList.remove('on');lk.lastChild.textContent=nf((+CFG.likes||0)+(o?1:0))};
+dk.onclick=function(){dk.classList.toggle('on');if(lk.classList.contains('on')){lk.classList.remove('on');lk.lastChild.textContent=nf(CFG.likes)}};
+$('.sv').onclick=function(){this.classList.toggle('on')};
+
+/* 댓글 (새로고침하면 초기화) */
+var data=CFG.comments.map(function(c){return{name:c.name,text:c.text,time:c.time,likes:+c.likes||0,me:false,on:0}}),list=$('.list');
+var cn=String(CFG.cmCount==null?'':CFG.cmCount).trim(),num=/^\d+$/.test(cn)?+cn:null,added=0;
+function cnt(){return cn===''?String(data.length):(num!==null?(nf(num+added)||'0'):cn)}
+function draw(){$('.cnt').textContent=cnt();
+ list.innerHTML=data.map(function(c,i){return '<div class="ytm-it" data-i="'+i+'">'+avatar(c.me?CFG.myImg:'',c.name,40)+'<div class="bd"><div class="nm"><b>'+esc(c.name)+'</b> · '+esc(c.time)+'</div><div class="tx">'+esc(c.text)+'</div>'+
+ '<div class="ft"><button class="l'+(c.on==1?' on':'')+'">'+ic(P.like)+'<span>'+nf(c.likes+(c.on==1?1:0))+'</span></button><button class="d'+(c.on==-1?' on':'')+'">'+ic(P.like,'dl')+'</button>'+(c.me?'<button class="x">삭제</button>':'')+'</div></div></div>'}).join('')}
+list.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;var i=+b.closest('.ytm-it').getAttribute('data-i'),c=data[i];
+ if(b.classList.contains('l'))c.on=c.on==1?0:1;else if(b.classList.contains('d'))c.on=c.on==-1?0:-1;else if(b.classList.contains('x')){data.splice(i,1);added--}draw()});
+var inp=$('.ytm-in2 input'),row=$('.ytm-in2 .row'),ok=$('.ok');
+inp.onfocus=function(){row.classList.add('on')};inp.oninput=function(){ok.disabled=!inp.value.trim()};
+function reset(){inp.value='';ok.disabled=true;row.classList.remove('on');inp.blur()}
+$('.cc').onclick=reset;
+function send(){var t=inp.value.trim();if(!t)return;data.unshift({name:CFG.myName||'@나',text:t,time:'방금 전',likes:0,me:true,on:0});added++;reset();draw()}
+ok.onclick=send;inp.onkeydown=function(e){if(e.key==='Enter'&&!e.isComposing)send()};
+draw();
+}
+
+/* ===== 에디터 ===== */
+const S={theme:'light',videoUrl:'',image:'',duration:'',photoCur:'',clock:'9:41',noti:'켜기',notiName:'',notiText:'',notiTime:'지금',notiDelay:3,
+title:'',views:'',date:'',desc:'',
+channel:'',channelImg:'',subs:'',likes:0,cmCount:'',myName:'',myImg:'',
+cm:'',
+scale:100,font:100,ratio:'16/9',skip:10};
+const DEF=JSON.stringify(S);
+try{const d=JSON.parse(localStorage.getItem('ytm-editor-v1')||'null');d&&Object.assign(S,d)}catch(e){}
+const F=[
+['영상',[['videoUrl','유튜브 주소 (비우면 사진 모드)'],['image','사진 주소 (비우면 유튜브 썸네일 사용)'],['duration','영상 길이 (예: 3:32)'],['photoCur','사진 모드 · 시작 시간 (예: 0:42)']]],
+['영상 정보',[['title','제목'],['views','조회수'],['date','업로드 시기'],['desc','설명','area'],['channel','채널 이름'],['channelImg','채널 프로필 사진 주소'],['subs','구독자 수 문구'],['likes','좋아요 수 (숫자)']]],
+['댓글',[['cmCount','댓글 개수 (숫자 또는 문구 / 비우면 아래 댓글 줄 수)'],['myName','내 닉네임'],['myImg','내 프로필 사진 주소'],['cm','초기 댓글 (한 줄에 하나: 닉네임 | 내용 | 시간 | 좋아요수)','area']]],
+['아이폰 화면 · 알림',[['clock','상태바 시간 (예: 9:41)'],['noti','iMessage 알림','sel',['켜기','끄기']],['notiName','보낸 사람 이름'],['notiText','문자 내용','area'],['notiTime','알림 시간 문구 (예: 지금)'],['notiDelay','화면이 보이고 몇 초 뒤에 알림?','range',1,30]]],
+['크기 · 비율',[['scale','전체 크기 %','range',60,130],['font','글자 크기 %','range',70,140],['ratio','영상 화면비','sel',['16/9','4/3','1/1','21/9','9/16']],['skip','더블탭 건너뛰기 (초)','range',5,30],['theme','테마','sel',['light','dark']]]]];
+const $=s=>document.querySelector(s);
+$('#form').innerHTML=F.map((g,gi)=>`<details ${gi<2?'open':''}><summary>${g[0]}</summary><div class="fs">`+g[1].map(f=>{
+ const [k,l,t,a]=f;let h;
+ if(t==='area')h=`<textarea data-k="${k}"></textarea>`;
+ else if(t==='range')h=`<input type="range" data-k="${k}" min="${a}" max="${f[4]}">`;
+ else if(t==='sel')h=`<select data-k="${k}">${a.map(o=>`<option>${o}</option>`).join('')}</select>`;
+ else h=`<input type="text" data-k="${k}">`;
+ return `<label>${l}${t==='range'?` <em data-v="${k}"></em>`:''}${h}</label>`}).join('')+`</div></details>`).join('');
+const PH={videoUrl:'https://www.youtube.com/watch?v=영상ID',image:'https://사진주소.jpg',duration:'3:32',photoCur:'0:00',title:'영상 제목',views:'조회수 12만회',date:'3일 전',desc:'영상 설명',channel:'채널 이름',channelImg:'https://프로필사진.jpg',subs:'구독자 24.5만명',likes:'3200',cmCount:'1203',myName:'@닉네임',myImg:'https://프로필사진.jpg',cm:'@닉네임 | 댓글 내용 | 2일 전 | 128',notiName:'보낸 사람',notiText:'문자 내용',notiTime:'지금'};
+document.querySelectorAll('[data-k]').forEach(el=>{const k=el.dataset.k;el.value=S[k];el.placeholder=PH[k]||'';
+ const sv=()=>{const e=document.querySelector(`[data-v="${k}"]`);e&&(e.textContent=el.value+(k==='skip'||k==='notiDelay'?'초':'%'))};sv();
+ el.addEventListener('input',()=>{S[k]=el.type==='range'?+el.value:el.value;sv();render()})});
+const style=document.createElement('style');style.textContent=CSS;document.head.appendChild(style);
+function cfg(){const c=Object.assign({},S);c.comments=S.cm.split('\n').filter(x=>x.trim()).map(l=>{const p=l.split('|').map(s=>s.trim());return{name:p[0]||'@user',text:p[1]||'',time:p[2]||'방금 전',likes:+p[3]||0}});delete c.cm;return c}
+function code(c,id){return '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">\n<style>'+CSS+'</style>\n<div class="ytm" id="'+id+'"></div>\n<script>\n('+mount.toString()+')(document.getElementById("'+id+'"),'+JSON.stringify(c).replace(/</g,'\\u003c')+');\n<\/script>'}
+const id='ytm'+Math.random().toString(36).slice(2,7);let raf;
+function render(){cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{const c=cfg();mount($('#preview'),c);try{localStorage.setItem('ytm-editor-v1',JSON.stringify(S))}catch(e){}$('#out').value=code(c,id)})}
+$('#copy').onclick=function(){const o=$('#out');o.select();let ok=false;try{ok=navigator.clipboard?(navigator.clipboard.writeText(o.value),true):document.execCommand('copy')}catch(e){try{ok=document.execCommand('copy')}catch(_){}}
+ this.textContent=ok?'복사됨!':'코드를 직접 선택해 복사하세요';setTimeout(()=>this.textContent='코드 복사',1800)};
+$('#reset').onclick=()=>{Object.assign(S,JSON.parse(DEF));document.querySelectorAll('[data-k]').forEach(el=>{el.value=S[el.dataset.k];el.dispatchEvent(new Event('input'))})};
+render();
+</script>
+</body>
+</html>
